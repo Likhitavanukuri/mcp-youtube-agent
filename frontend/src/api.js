@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const BACKEND_URL = "http://localhost:3000";
+const BACKEND_URL = import.meta.env.VITE_API_BASE_URL; // ⬅ use Vercel env
 
 export const mcp = async (tool, input = {}) => {
   try {
@@ -11,12 +11,10 @@ export const mcp = async (tool, input = {}) => {
 
     const data = response.data;
 
-    // If backend returns a simple string (GPT reply), wrap it safely
     if (typeof data === "string") {
       return { text: data };
     }
 
-    // If backend returns { error: ... }, pass it through
     if (data.error) {
       return { text: "⚠️ " + data.error };
     }
