@@ -10,8 +10,11 @@ function App() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
+  // ✅ FIXED: Uses Vercel backend instead of localhost
   useEffect(() => {
-    axios.get("http://localhost:3000/auth/status").catch(() => {});
+    axios
+      .get(`${import.meta.env.VITE_API_BASE_URL}/auth/status`)
+      .catch(() => {});
   }, []);
 
   // ---------- VIDEO GRID ----------
@@ -69,49 +72,18 @@ function App() {
     </div>
   );
 
-  // ---------- LOCAL CHAT REPLIES ----------
-  const localReplies = {
-    hi: "Hi! 👋 How can I help you?",
-    hello: "Hello! 😊 What would you like to search?",
-    hey: "Hey! 👋 What’s up?",
-    "good morning": "Good morning! ☀️",
-    "good evening": "Good evening! 🌙",
-    "good night": "Good night! 😴",
-    "how are you": "I’m YOUI and I’m doing great! 🤖",
-    "who are you": "I'm YOUI, your YouTube AI Assistant 🎥",
-  };
-
-  const greetingKeywords = [
-    "hi",
-    "hello",
-    "hey",
-    "good morning",
-    "good evening",
-    "good night",
-    "how are you",
-    "who are you",
-  ];
-
   // ---------- INTENT DETECTOR ----------
   const detectIntent = async (query) => {
     const lower = query.toLowerCase().trim();
 
-    // GREETINGS — exact match
-    if (greetingKeywords.includes(lower)) {
-      return { text: localReplies[lower] };
-    }
-
-    // Extract number for maxResults
     const numberMatch = lower.match(/\b\d+\b/);
     const limit = numberMatch ? parseInt(numberMatch[0]) : 10;
 
-    // Channel videos
-    if (lower.startsWith("channel ")) {
-      const name = query.replace("channel", "").trim();
-      return await mcp("youtube.channelVideos", { channel: name });
-    }
+    if (lower.startsWith("channel "))
+      return await mcp("youtube.channelVideos", {
+        channel: lower.replace("channel", "").trim(),
+      });
 
-    // YouTube actions
     if (lower.includes("liked")) return await mcp("youtube.getLikedVideos");
     if (lower.includes("history")) return await mcp("youtube.getHistory");
 
@@ -125,13 +97,6 @@ function App() {
         videoId: lower.split(" ")[1],
       });
 
-    if (lower.startsWith("search "))
-      return await mcp("youtube.search", {
-        query: lower.replace("search", "").trim(),
-        maxResults: limit,
-      });
-
-    // DEFAULT — always search with dynamic limit
     return await mcp("youtube.search", { query, maxResults: limit });
   };
 
@@ -142,31 +107,25 @@ function App() {
     const query = input;
 
     setMessages((prev) => [...prev, { sender: "user", text: query }]);
-
-    let reply = "";
-
-    if (query.toLowerCase().startsWith("channel"))
-      reply = "Fetching channel videos…";
-    else if (query.toLowerCase().includes("liked"))
-      reply = "Fetching your liked videos…";
-    else if (query.toLowerCase().includes("history"))
-      reply = "Fetching your watch history…";
-    else if (query.toLowerCase().startsWith("info"))
-      reply = "Fetching video info…";
-    else if (query.toLowerCase().startsWith("like"))
-      reply = "Liking that video…";
-    else reply = `Searching for "${query}"…`;
-
-    setMessages((prev) => [...prev, { sender: "youi", text: reply }]);
-
     setInput("");
     setIsTyping(true);
+
+    setMessages((prev) => [
+      ...prev,
+      { sender: "youi", text: `Searching for "${query}"…` },
+    ]);
 
     try {
       const response = await detectIntent(query);
 
       setTimeout(() => {
-        setMessages((prev) => [...prev, { sender: "youi", text: response }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "youi",
+            text: response,
+          },
+        ]);
         setIsTyping(false);
       }, 350);
     } catch {
@@ -181,6 +140,7 @@ function App() {
   // ---------- VIDEO GRID OUTPUT ----------
   const getLatestVideoGrid = () => {
     const last = messages[messages.length - 1];
+
     if (last?.text?.items) return renderVideos(last.text.items);
 
     return (
@@ -268,7 +228,11 @@ function App() {
             >
               <b>{msg.sender === "youi" ? "🤖 YOUI" : "👤 You"}</b>
               <div style={{ marginTop: "6px" }}>
-                {typeof msg.text === "string" ? msg.text : ""}
+                {typeof msg.text === "string"
+                  ? msg.text
+                  : msg.text?.items
+                  ? "(showing results below)"
+                  : JSON.stringify(msg.text)}
               </div>
             </div>
           ))}
@@ -288,7 +252,7 @@ function App() {
           )}
         </div>
 
-        {/* INPUT BOX */}
+        {/* INPUT */}
         <div
           style={{
             padding: "12px",
@@ -301,7 +265,7 @@ function App() {
             value={input}
             placeholder="Type hi, 5 comedy videos, or channel apna college…"
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()} 
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             style={{
               flex: 1,
               padding: "14px",
@@ -332,7 +296,6 @@ function App() {
   );
 }
 
-// Button style
 const sideBtn = {
   padding: "12px",
   borderRadius: "10px",
