@@ -10,12 +10,18 @@ function App() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
-  // ✅ FIXED: Uses production backend instead of localhost
+  // ✅ Uses production backend
   useEffect(() => {
     axios
       .get(`${import.meta.env.VITE_API_BASE_URL}/auth/status`)
       .catch(() => {});
   }, []);
+
+  // ⭐ Extract Video ID from any YouTube link (NEW FEATURE)
+  const extractVideoId = (url) => {
+    const match = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/);
+    return match ? match[1] : null;
+  };
 
   // ---------- VIDEO GRID ----------
   const renderVideos = (items) => (
@@ -91,11 +97,24 @@ function App() {
         videoId: lower.split(" ")[1],
       });
 
-    if (lower.startsWith("like "))
-      return await mcp("youtube.likeVideo", {
-        videoId: lower.split(" ")[1],
-      });
+    // ⭐ LIKE A VIDEO — supports ID + full YouTube link
+    if (lower.startsWith("like ")) {
+      const parts = query.split(" ");
+      const link = parts[1];
 
+      // If user gives a YouTube link
+      if (link?.includes("youtube.com") || link?.includes("youtu.be")) {
+        const vid = extractVideoId(link);
+        if (!vid) return { text: "❌ Could not extract video ID from link." };
+
+        return await mcp("youtube.likeVideo", { videoId: vid });
+      }
+
+      // If user gives a video ID directly
+      return await mcp("youtube.likeVideo", { videoId: link });
+    }
+
+    // Default → SEARCH
     return await mcp("youtube.search", { query, maxResults: limit });
   };
 
@@ -120,10 +139,7 @@ function App() {
       setTimeout(() => {
         setMessages((prev) => [
           ...prev,
-          {
-            sender: "youi",
-            text: response,
-          },
+          { sender: "youi", text: response },
         ]);
         setIsTyping(false);
       }, 350);
@@ -162,7 +178,7 @@ function App() {
         background: "#f4f5f7",
       }}
     >
-      {/* SIDEBAR → hide on mobile */}
+      {/* SIDEBAR (Desktop Only) */}
       {!isMobile && (
         <div
           style={{
@@ -273,7 +289,7 @@ function App() {
         >
           <input
             value={input}
-            placeholder="Type hi, 5 comedy videos, or channel apna college…"
+            placeholder="Type 5 comedy videos, channel apna college, or like link…"
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             style={{
