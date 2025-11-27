@@ -10,20 +10,39 @@ function App() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
-  // ✅ Uses production backend
+  // ⭐ NEW STATES
+  const [likedIds, setLikedIds] = useState([]); // store liked video IDs
+  const [history, setHistory] = useState([]); // store watch history
+
+  // Load backend status + history
   useEffect(() => {
     axios
       .get(`${import.meta.env.VITE_API_BASE_URL}/auth/status`)
       .catch(() => {});
+
+    const saved = localStorage.getItem("watchHistory");
+    if (saved) setHistory(JSON.parse(saved));
   }, []);
 
-  // ⭐ Extract Video ID from any YouTube link (NEW FEATURE)
+  // Save watch history
+  useEffect(() => {
+    localStorage.setItem("watchHistory", JSON.stringify(history));
+  }, [history]);
+
+  // Extract video ID from URL
   const extractVideoId = (url) => {
     const match = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/);
     return match ? match[1] : null;
   };
 
-  // ---------- VIDEO GRID ----------
+  // Add to watch history safely
+  const addToHistory = (video) => {
+    if (history.find((v) => v.id === video.id)) return;
+    const updated = [...history, video];
+    setHistory(updated);
+  };
+
+  // ---------- VIDEO GRID (START) ----------
   const renderVideos = (items) => (
     <div
       style={{
@@ -37,6 +56,8 @@ function App() {
         const snippet = item.snippet;
         const id = item.id?.videoId || item.id;
 
+        const isLiked = likedIds.includes(id);
+
         return (
           <div
             key={index}
@@ -47,11 +68,27 @@ function App() {
               boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
             }}
           >
-            <img
-              src={snippet?.thumbnails?.high?.url}
-              style={{ width: "100%", borderRadius: "12px" }}
-            />
+            {/* THUMBNAIL */}
+            <a
+              href={`https://www.youtube.com/watch?v=${id}`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() =>
+                addToHistory({
+                  id,
+                  title: snippet?.title,
+                  thumbnail: snippet?.thumbnails?.high?.url,
+                  channel: snippet?.channelTitle,
+                })
+              }
+            >
+              <img
+                src={snippet?.thumbnails?.high?.url}
+                style={{ width: "100%", borderRadius: "12px" }}
+              />
+            </a>
 
+            {/* TITLE */}
             <h3
               style={{
                 marginTop: "10px",
@@ -64,14 +101,79 @@ function App() {
                 target="_blank"
                 rel="noreferrer"
                 style={{ color: "#d90429", textDecoration: "none" }}
+                onClick={() =>
+                  addToHistory({
+                    id,
+                    title: snippet?.title,
+                    thumbnail: snippet?.thumbnails?.high?.url,
+                    channel: snippet?.channelTitle,
+                  })
+                }
               >
                 {snippet?.title}
               </a>
             </h3>
 
+            {/* CHANNEL */}
             <p style={{ color: "#666", fontSize: "14px" }}>
               {snippet?.channelTitle}
             </p>
+
+            {/* ⭐ LIKED BADGE */}
+            {isLiked && (
+              <div
+                style={{
+                  fontSize: "14px",
+                  color: "#2E7D32",
+                  fontWeight: "600",
+                  marginBottom: "8px",
+                }}
+              >
+                👍 Liked
+              </div>
+            )}
+            {/* ⭐ LIKE / UNLIKE BUTTON */}
+            <button
+              onClick={async () => {
+                if (!isLiked) {
+                  // REAL YOUTUBE LIKE
+                  await mcp("youtube.likeVideo", { videoId: id });
+
+                  setLikedIds((prev) => [...prev, id]);
+
+                  setMessages((prev) => [
+                    ...prev,
+                    { sender: "youi", text: `👍 Liked: ${snippet?.title}` },
+                  ]);
+                } else {
+                  // REAL YOUTUBE UNLIKE
+                  await mcp("youtube.likeVideo", {
+                    videoId: id,
+                    rating: "none",
+                  });
+
+                  setLikedIds((prev) => prev.filter((v) => v !== id));
+
+                  setMessages((prev) => [
+                    ...prev,
+                    { sender: "youi", text: `👎 Unliked: ${snippet?.title}` },
+                  ]);
+                }
+              }}
+              style={{
+                marginTop: "10px",
+                background: isLiked ? "#2E7D32" : "#888",
+                color: "white",
+                padding: "10px 14px",
+                borderRadius: "8px",
+                border: "none",
+                fontSize: "14px",
+                cursor: "pointer",
+                width: "100%",
+              }}
+            >
+              {isLiked ? "👍 Liked" : "👍 Like"}
+            </button>
           </div>
         );
       })}
@@ -84,44 +186,57 @@ function App() {
     const numberMatch = lower.match(/\b\d+\b/);
     const limit = numberMatch ? parseInt(numberMatch[0]) : 10;
 
+    // CHANNEL SEARCH
     if (lower.startsWith("channel "))
       return await mcp("youtube.channelVideos", {
         channel: lower.replace("channel", "").trim(),
       });
 
-    if (lower.includes("liked")) return await mcp("youtube.getLikedVideos");
-    if (lower.includes("history")) return await mcp("youtube.getHistory");
+    // SHOW LIKED VIDEOS
+    if (lower.includes("liked")) {
+      const res = await mcp("youtube.getLikedVideos");
+      if (res.items) setLikedIds(res.items.map((v) => v.id));
+      return res;
+    }
 
+    // SHOW WATCH HISTORY
+    if (lower.includes("history")) {
+      return { items: history };
+    }
+
+    // VIDEO INFO
     if (lower.startsWith("info "))
       return await mcp("youtube.videoInfo", {
         videoId: lower.split(" ")[1],
       });
 
-    // ⭐ LIKE A VIDEO — supports ID + full YouTube link
+    // ⭐ LIKE BY LINK OR ID
     if (lower.startsWith("like ")) {
-      const parts = query.split(" ");
-      const link = parts[1];
+      const link = query.split(" ")[1];
 
-      // If user gives a YouTube link
+      // If it's a URL
       if (link?.includes("youtube.com") || link?.includes("youtu.be")) {
         const vid = extractVideoId(link);
-        if (!vid) return { text: "❌ Could not extract video ID from link." };
+        if (!vid) return { text: "❌ Could not extract video ID." };
+
+        setLikedIds((prev) => [...prev, vid]);
 
         return await mcp("youtube.likeVideo", { videoId: vid });
       }
 
-      // If user gives a video ID directly
+      // If it's a raw video ID
+      setLikedIds((prev) => [...prev, link]);
+
       return await mcp("youtube.likeVideo", { videoId: link });
     }
 
-    // Default → SEARCH
+    // DEFAULT → SEARCH
     return await mcp("youtube.search", { query, maxResults: limit });
   };
 
   // ---------- SEND MESSAGE ----------
   const sendMessage = async () => {
     if (!input.trim()) return;
-
     const query = input;
 
     setMessages((prev) => [...prev, { sender: "user", text: query }]);
@@ -174,11 +289,11 @@ function App() {
       style={{
         height: "100vh",
         display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "110px 1fr 480px",
+        gridTemplateColumns: isMobile ? "1fr" : "140px 1fr 480px",
         background: "#f4f5f7",
       }}
     >
-      {/* SIDEBAR (Desktop Only) */}
+      {/* ⭐ SIDEBAR */}
       {!isMobile && (
         <div
           style={{
@@ -191,29 +306,36 @@ function App() {
             alignItems: "center",
           }}
         >
+          {/* WATCH HISTORY BUTTON */}
           <button
             style={sideBtn}
-            onClick={async () => {
-              const res = await mcp("youtube.getHistory");
-              setMessages((p) => [...p, { sender: "youi", text: res }]);
-            }}
+            onClick={() =>
+              setMessages((prev) => [
+                ...prev,
+                { sender: "youi", text: { items: history } },
+              ])
+            }
           >
-            History
+            Watch History
           </button>
 
+          {/* LIKED VIDEOS BUTTON */}
           <button
             style={sideBtn}
             onClick={async () => {
               const res = await mcp("youtube.getLikedVideos");
+
+              if (res.items) setLikedIds(res.items.map((v) => v.id));
+
               setMessages((p) => [...p, { sender: "youi", text: res }]);
             }}
           >
-            Liked
+            Liked Videos
           </button>
         </div>
       )}
 
-      {/* VIDEO GRID */}
+      {/* ⭐ VIDEO GRID */}
       <div
         style={{
           overflowY: "auto",
@@ -223,10 +345,11 @@ function App() {
         <div style={{ padding: "20px", fontSize: "26px", fontWeight: "700" }}>
           YOUI – YouTube Dashboard
         </div>
+
         {getLatestVideoGrid()}
       </div>
 
-      {/* CHAT PANEL */}
+      {/* ⭐ CHAT PANEL */}
       <div
         style={{
           borderLeft: isMobile ? "none" : "1px solid #eee",
@@ -263,6 +386,7 @@ function App() {
             </div>
           ))}
 
+          {/* YOUI IS TYPING */}
           {isTyping && (
             <div
               style={{
@@ -278,7 +402,7 @@ function App() {
           )}
         </div>
 
-        {/* INPUT */}
+        {/* ⭐ INPUT BOX */}
         <div
           style={{
             padding: "12px",
@@ -289,7 +413,7 @@ function App() {
         >
           <input
             value={input}
-            placeholder="Type 5 comedy videos, channel apna college, or like link…"
+            placeholder="Search videos, like link, or watch history…"
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             style={{
@@ -322,15 +446,17 @@ function App() {
   );
 }
 
+/* ⭐ SIDEBAR BUTTON STYLE */
 const sideBtn = {
   padding: "12px",
   borderRadius: "10px",
   background: "#fafafa",
   border: "1px solid #ddd",
-  width: "70px",
+  width: "110px",
   cursor: "pointer",
   fontSize: "13px",
   fontWeight: "600",
 };
 
 export default App;
+
