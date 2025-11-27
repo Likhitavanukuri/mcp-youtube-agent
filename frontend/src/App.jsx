@@ -10,11 +10,16 @@ function App() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
-  // ⭐ NEW STATES
+  // ⭐ Store liked video IDs
   const [likedIds, setLikedIds] = useState([]);
+
+  // ⭐ Store watch history
   const [history, setHistory] = useState([]);
 
-  // Load backend status + history
+  // ⭐ FINAL FIX → Controls what appears in the grid
+  const [currentGrid, setCurrentGrid] = useState(null);
+
+  // Load backend & history
   useEffect(() => {
     axios
       .get(`${import.meta.env.VITE_API_BASE_URL}/auth/status`)
@@ -24,18 +29,18 @@ function App() {
     if (saved) setHistory(JSON.parse(saved));
   }, []);
 
-  // Save history locally
+  // Save history
   useEffect(() => {
     localStorage.setItem("watchHistory", JSON.stringify(history));
   }, [history]);
 
-  // Extract video ID from YouTube URL
+  // Extract Video ID
   const extractVideoId = (url) => {
     const match = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/);
     return match ? match[1] : null;
   };
 
-  // ⭐ FIXED — Watch History Builder
+  // ⭐ FIXED: Build FULL video objects for Watch History
   const addToHistory = (video) => {
     if (history.find((v) => v.id === video.id)) return;
 
@@ -128,7 +133,7 @@ function App() {
               {snippet?.channelTitle}
             </p>
 
-            {/* Liked Badge */}
+            {/* LIKED BADGE */}
             {isLiked && (
               <div
                 style={{
@@ -193,21 +198,28 @@ function App() {
     const numberMatch = lower.match(/\b\d+\b/);
     const limit = numberMatch ? parseInt(numberMatch[0]) : 10;
 
-    // Channel
-    if (lower.startsWith("channel "))
-      return await mcp("youtube.channelVideos", {
+    // Channel videos
+    if (lower.startsWith("channel ")) {
+      const res = await mcp("youtube.channelVideos", {
         channel: lower.replace("channel", "").trim(),
       });
+      if (res.items) setCurrentGrid(res.items);
+      return res;
+    }
 
     // Liked videos
     if (lower.includes("liked")) {
       const res = await mcp("youtube.getLikedVideos");
-      if (res.items) setLikedIds(res.items.map((v) => v.id));
+      if (res.items) {
+        setLikedIds(res.items.map((v) => v.id));
+        setCurrentGrid(res.items);
+      }
       return res;
     }
 
-    // History
+    // Watch History
     if (lower.includes("history")) {
+      setCurrentGrid(history);
       return { items: history };
     }
 
@@ -217,27 +229,35 @@ function App() {
         videoId: lower.split(" ")[1],
       });
 
-    // LIKE (ID or link)
+    // Like by ID or link
     if (lower.startsWith("like ")) {
       const part = query.split(" ")[1];
 
       if (part.includes("youtube.com") || part.includes("youtu.be")) {
         const vid = extractVideoId(part);
-        setLikedIds((prev) => [...prev, vid]);
+        setLikedIds((p) => [...p, vid]);
         return await mcp("youtube.likeVideo", { videoId: vid });
       }
 
-      setLikedIds((prev) => [...prev, part]);
+      setLikedIds((p) => [...p, part]);
       return await mcp("youtube.likeVideo", { videoId: part });
     }
 
-    // Default → search
-    return await mcp("youtube.search", { query, maxResults: limit });
+    // DEFAULT → SEARCH
+    const res = await mcp("youtube.search", {
+      query,
+      maxResults: limit,
+    });
+
+    if (res.items) setCurrentGrid(res.items);
+
+    return res;
   };
 
   // ---------- SEND MESSAGE ----------
   const sendMessage = async () => {
     if (!input.trim()) return;
+
     const query = input;
 
     setMessages((prev) => [...prev, { sender: "user", text: query }]);
@@ -253,26 +273,28 @@ function App() {
       const response = await detectIntent(query);
 
       setTimeout(() => {
-        setMessages((prev) => [...prev, { sender: "youi", text: response }]);
+        setMessages((prev) => [
+          ...prev,
+          { sender: "youi", text: response },
+        ]);
         setIsTyping(false);
       }, 350);
     } catch {
       setMessages((prev) => [
         ...prev,
-        { sender: "youi", text: "❌ Unable to fetch videos right now." },
+        { sender: "youi", text: "❌ Error fetching videos." },
       ]);
       setIsTyping(false);
     }
   };
 
-  // ---------- VIDEO GRID CONTAINER ----------
+  // ---------- GET GRID ----------
   const getLatestVideoGrid = () => {
-    const last = messages[messages.length - 1];
-    if (last?.text?.items) return renderVideos(last.text.items);
+    if (currentGrid) return renderVideos(currentGrid);
 
     return (
       <div style={{ padding: "20px", color: "#777", fontSize: "16px" }}>
-        Try searching comedy, songs, or channel apna college
+        Try searching comedy, songs, or channel apna college…
       </div>
     );
   };
@@ -305,12 +327,13 @@ function App() {
           {/* WATCH HISTORY */}
           <button
             style={sideBtn}
-            onClick={() =>
+            onClick={() => {
+              setCurrentGrid(history);
               setMessages((prev) => [
                 ...prev,
                 { sender: "youi", text: { items: history } },
-              ])
-            }
+              ]);
+            }}
           >
             Watch History
           </button>
@@ -320,7 +343,12 @@ function App() {
             style={sideBtn}
             onClick={async () => {
               const res = await mcp("youtube.getLikedVideos");
-              if (res.items) setLikedIds(res.items.map((v) => v.id));
+
+              if (res.items) {
+                setLikedIds(res.items.map((v) => v.id));
+                setCurrentGrid(res.items);
+              }
+
               setMessages((prev) => [...prev, { sender: "youi", text: res }]);
             }}
           >
@@ -388,7 +416,7 @@ function App() {
           )}
         </div>
 
-        {/* INPUT */}
+        {/* INPUT AREA */}
         <div
           style={{
             padding: "12px",
@@ -399,7 +427,7 @@ function App() {
         >
           <input
             value={input}
-            placeholder="Search videos, like link, or watch history…"
+            placeholder="Search videos, like URL, or watch history…"
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             style={{
@@ -432,7 +460,7 @@ function App() {
   );
 }
 
-// ⭐ SIDEBAR BUTTON STYLE
+// Sidebar button style
 const sideBtn = {
   padding: "12px",
   borderRadius: "10px",
