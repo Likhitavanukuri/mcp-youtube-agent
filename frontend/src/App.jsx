@@ -10,7 +10,7 @@ function App() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
-  // ✅ FIXED: Uses Vercel backend instead of localhost
+  // ✅ FIXED: Uses production backend instead of localhost
   useEffect(() => {
     axios
       .get(`${import.meta.env.VITE_API_BASE_URL}/auth/status`)
@@ -22,7 +22,7 @@ function App() {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
         gap: "20px",
         padding: "10px",
       }}
@@ -75,7 +75,6 @@ function App() {
   // ---------- INTENT DETECTOR ----------
   const detectIntent = async (query) => {
     const lower = query.toLowerCase().trim();
-
     const numberMatch = lower.match(/\b\d+\b/);
     const limit = numberMatch ? parseInt(numberMatch[0]) : 10;
 
@@ -152,50 +151,59 @@ function App() {
   };
 
   // ---------- UI ----------
+  const isMobile = window.innerWidth < 768;
+
   return (
     <div
       style={{
         height: "100vh",
         display: "grid",
-        gridTemplateColumns: "110px 1fr 480px",
+        gridTemplateColumns: isMobile ? "1fr" : "110px 1fr 480px",
         background: "#f4f5f7",
       }}
     >
-      {/* SIDEBAR */}
-      <div
-        style={{
-          background: "#fff",
-          borderRight: "1px solid #eee",
-          paddingTop: "25px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "25px",
-          alignItems: "center",
-        }}
-      >
-        <button
-          style={sideBtn}
-          onClick={async () => {
-            const res = await mcp("youtube.getHistory");
-            setMessages((p) => [...p, { sender: "youi", text: res }]);
+      {/* SIDEBAR → hide on mobile */}
+      {!isMobile && (
+        <div
+          style={{
+            background: "#fff",
+            borderRight: "1px solid #eee",
+            paddingTop: "25px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "25px",
+            alignItems: "center",
           }}
         >
-          History
-        </button>
+          <button
+            style={sideBtn}
+            onClick={async () => {
+              const res = await mcp("youtube.getHistory");
+              setMessages((p) => [...p, { sender: "youi", text: res }]);
+            }}
+          >
+            History
+          </button>
 
-        <button
-          style={sideBtn}
-          onClick={async () => {
-            const res = await mcp("youtube.getLikedVideos");
-            setMessages((p) => [...p, { sender: "youi", text: res }]);
-          }}
-        >
-          Liked
-        </button>
-      </div>
+          <button
+            style={sideBtn}
+            onClick={async () => {
+              const res = await mcp("youtube.getLikedVideos");
+              setMessages((p) => [...p, { sender: "youi", text: res }]);
+            }}
+          >
+            Liked
+          </button>
+        </div>
+      )}
 
       {/* VIDEO GRID */}
-      <div style={{ overflowY: "auto" }}>
+      <div
+        style={{
+          overflowY: "auto",
+          maxHeight: isMobile ? "50vh" : "100%",
+        }}
+      >
         <div style={{ padding: "20px", fontSize: "26px", fontWeight: "700" }}>
           YOUI – YouTube Dashboard
         </div>
@@ -205,10 +213,12 @@ function App() {
       {/* CHAT PANEL */}
       <div
         style={{
-          borderLeft: "1px solid #eee",
+          borderLeft: isMobile ? "none" : "1px solid #eee",
+          borderTop: isMobile ? "1px solid #eee" : "none",
           background: "#fff",
           display: "flex",
           flexDirection: "column",
+          height: isMobile ? "50vh" : "100%",
         }}
       >
         <div style={{ flex: 1, padding: "20px", overflowY: "auto" }}>
