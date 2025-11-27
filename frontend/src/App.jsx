@@ -11,8 +11,8 @@ function App() {
   const [isTyping, setIsTyping] = useState(false);
 
   // ⭐ NEW STATES
-  const [likedIds, setLikedIds] = useState([]); // store liked video IDs
-  const [history, setHistory] = useState([]); // store watch history
+  const [likedIds, setLikedIds] = useState([]);
+  const [history, setHistory] = useState([]);
 
   // Load backend status + history
   useEffect(() => {
@@ -24,25 +24,36 @@ function App() {
     if (saved) setHistory(JSON.parse(saved));
   }, []);
 
-  // Save watch history
+  // Save history locally
   useEffect(() => {
     localStorage.setItem("watchHistory", JSON.stringify(history));
   }, [history]);
 
-  // Extract video ID from URL
+  // Extract video ID from YouTube URL
   const extractVideoId = (url) => {
     const match = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/);
     return match ? match[1] : null;
   };
 
-  // Add to watch history safely
+  // ⭐ FIXED — Watch History Builder
   const addToHistory = (video) => {
     if (history.find((v) => v.id === video.id)) return;
-    const updated = [...history, video];
-    setHistory(updated);
+
+    const fullItem = {
+      id: video.id,
+      snippet: {
+        title: video.title,
+        channelTitle: video.channel,
+        thumbnails: {
+          high: { url: video.thumbnail },
+        },
+      },
+    };
+
+    setHistory((prev) => [...prev, fullItem]);
   };
 
-  // ---------- VIDEO GRID (START) ----------
+  // ---------- VIDEO GRID ----------
   const renderVideos = (items) => (
     <div
       style={{
@@ -55,7 +66,6 @@ function App() {
       {items.map((item, index) => {
         const snippet = item.snippet;
         const id = item.id?.videoId || item.id;
-
         const isLiked = likedIds.includes(id);
 
         return (
@@ -114,12 +124,11 @@ function App() {
               </a>
             </h3>
 
-            {/* CHANNEL */}
             <p style={{ color: "#666", fontSize: "14px" }}>
               {snippet?.channelTitle}
             </p>
 
-            {/* ⭐ LIKED BADGE */}
+            {/* Liked Badge */}
             {isLiked && (
               <div
                 style={{
@@ -132,13 +141,12 @@ function App() {
                 👍 Liked
               </div>
             )}
-            {/* ⭐ LIKE / UNLIKE BUTTON */}
+
+            {/* LIKE / UNLIKE */}
             <button
               onClick={async () => {
                 if (!isLiked) {
-                  // REAL YOUTUBE LIKE
                   await mcp("youtube.likeVideo", { videoId: id });
-
                   setLikedIds((prev) => [...prev, id]);
 
                   setMessages((prev) => [
@@ -146,7 +154,6 @@ function App() {
                     { sender: "youi", text: `👍 Liked: ${snippet?.title}` },
                   ]);
                 } else {
-                  // REAL YOUTUBE UNLIKE
                   await mcp("youtube.likeVideo", {
                     videoId: id,
                     rating: "none",
@@ -186,51 +193,45 @@ function App() {
     const numberMatch = lower.match(/\b\d+\b/);
     const limit = numberMatch ? parseInt(numberMatch[0]) : 10;
 
-    // CHANNEL SEARCH
+    // Channel
     if (lower.startsWith("channel "))
       return await mcp("youtube.channelVideos", {
         channel: lower.replace("channel", "").trim(),
       });
 
-    // SHOW LIKED VIDEOS
+    // Liked videos
     if (lower.includes("liked")) {
       const res = await mcp("youtube.getLikedVideos");
       if (res.items) setLikedIds(res.items.map((v) => v.id));
       return res;
     }
 
-    // SHOW WATCH HISTORY
+    // History
     if (lower.includes("history")) {
       return { items: history };
     }
 
-    // VIDEO INFO
+    // Video info
     if (lower.startsWith("info "))
       return await mcp("youtube.videoInfo", {
         videoId: lower.split(" ")[1],
       });
 
-    // ⭐ LIKE BY LINK OR ID
+    // LIKE (ID or link)
     if (lower.startsWith("like ")) {
-      const link = query.split(" ")[1];
+      const part = query.split(" ")[1];
 
-      // If it's a URL
-      if (link?.includes("youtube.com") || link?.includes("youtu.be")) {
-        const vid = extractVideoId(link);
-        if (!vid) return { text: "❌ Could not extract video ID." };
-
+      if (part.includes("youtube.com") || part.includes("youtu.be")) {
+        const vid = extractVideoId(part);
         setLikedIds((prev) => [...prev, vid]);
-
         return await mcp("youtube.likeVideo", { videoId: vid });
       }
 
-      // If it's a raw video ID
-      setLikedIds((prev) => [...prev, link]);
-
-      return await mcp("youtube.likeVideo", { videoId: link });
+      setLikedIds((prev) => [...prev, part]);
+      return await mcp("youtube.likeVideo", { videoId: part });
     }
 
-    // DEFAULT → SEARCH
+    // Default → search
     return await mcp("youtube.search", { query, maxResults: limit });
   };
 
@@ -252,10 +253,7 @@ function App() {
       const response = await detectIntent(query);
 
       setTimeout(() => {
-        setMessages((prev) => [
-          ...prev,
-          { sender: "youi", text: response },
-        ]);
+        setMessages((prev) => [...prev, { sender: "youi", text: response }]);
         setIsTyping(false);
       }, 350);
     } catch {
@@ -267,16 +265,14 @@ function App() {
     }
   };
 
-  // ---------- VIDEO GRID OUTPUT ----------
+  // ---------- VIDEO GRID CONTAINER ----------
   const getLatestVideoGrid = () => {
     const last = messages[messages.length - 1];
-
     if (last?.text?.items) return renderVideos(last.text.items);
 
     return (
       <div style={{ padding: "20px", color: "#777", fontSize: "16px" }}>
-        Try searching <b>comedy</b>, <b>songs</b>, or
-        <b> channel apna college</b>
+        Try searching comedy, songs, or channel apna college
       </div>
     );
   };
@@ -293,7 +289,7 @@ function App() {
         background: "#f4f5f7",
       }}
     >
-      {/* ⭐ SIDEBAR */}
+      {/* SIDEBAR */}
       {!isMobile && (
         <div
           style={{
@@ -306,7 +302,7 @@ function App() {
             alignItems: "center",
           }}
         >
-          {/* WATCH HISTORY BUTTON */}
+          {/* WATCH HISTORY */}
           <button
             style={sideBtn}
             onClick={() =>
@@ -319,15 +315,13 @@ function App() {
             Watch History
           </button>
 
-          {/* LIKED VIDEOS BUTTON */}
+          {/* LIKED VIDEOS */}
           <button
             style={sideBtn}
             onClick={async () => {
               const res = await mcp("youtube.getLikedVideos");
-
               if (res.items) setLikedIds(res.items.map((v) => v.id));
-
-              setMessages((p) => [...p, { sender: "youi", text: res }]);
+              setMessages((prev) => [...prev, { sender: "youi", text: res }]);
             }}
           >
             Liked Videos
@@ -335,21 +329,15 @@ function App() {
         </div>
       )}
 
-      {/* ⭐ VIDEO GRID */}
-      <div
-        style={{
-          overflowY: "auto",
-          maxHeight: isMobile ? "50vh" : "100%",
-        }}
-      >
+      {/* VIDEO GRID */}
+      <div style={{ overflowY: "auto", maxHeight: isMobile ? "50vh" : "100%" }}>
         <div style={{ padding: "20px", fontSize: "26px", fontWeight: "700" }}>
           YOUI – YouTube Dashboard
         </div>
-
         {getLatestVideoGrid()}
       </div>
 
-      {/* ⭐ CHAT PANEL */}
+      {/* CHAT PANEL */}
       <div
         style={{
           borderLeft: isMobile ? "none" : "1px solid #eee",
@@ -366,8 +354,7 @@ function App() {
               key={i}
               style={{
                 marginBottom: "14px",
-                alignSelf:
-                  msg.sender === "user" ? "flex-end" : "flex-start",
+                alignSelf: msg.sender === "user" ? "flex-end" : "flex-start",
                 background: msg.sender === "user" ? "#d9fdd3" : "#ffecec",
                 padding: "12px 14px",
                 borderRadius: "12px",
@@ -386,7 +373,6 @@ function App() {
             </div>
           ))}
 
-          {/* YOUI IS TYPING */}
           {isTyping && (
             <div
               style={{
@@ -402,7 +388,7 @@ function App() {
           )}
         </div>
 
-        {/* ⭐ INPUT BOX */}
+        {/* INPUT */}
         <div
           style={{
             padding: "12px",
@@ -446,7 +432,7 @@ function App() {
   );
 }
 
-/* ⭐ SIDEBAR BUTTON STYLE */
+// ⭐ SIDEBAR BUTTON STYLE
 const sideBtn = {
   padding: "12px",
   borderRadius: "10px",
@@ -459,4 +445,3 @@ const sideBtn = {
 };
 
 export default App;
-
