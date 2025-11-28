@@ -6,23 +6,19 @@ function App() {
   const [messages, setMessages] = useState([
     { sender: "youi", text: "Hi, I’m YOUI 🤖. Search anything on YouTube!" },
   ]);
-
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
 
-  // ⭐ Local store for liked videos
   const [likedIds, setLikedIds] = useState([]);
-
-  // ⭐ Local store for watch history
   const [history, setHistory] = useState([]);
-
-  // ⭐ Controls what appears in the middle grid
   const [currentGrid, setCurrentGrid] = useState(null);
 
-  // ⭐ Track last search keyword for recommendations
   const [lastSearch, setLastSearch] = useState("");
 
-  // Load backend + history from localStorage
+  // ⭐ NEW: Recommendation list separate from main grid
+  const [recommendList, setRecommendList] = useState([]);
+
+  // Load backend + history
   useEffect(() => {
     axios
       .get(`${import.meta.env.VITE_API_BASE_URL}/auth/status`)
@@ -37,13 +33,13 @@ function App() {
     localStorage.setItem("watchHistory", JSON.stringify(history));
   }, [history]);
 
-  // Extract YouTube video ID
+  // Extract video ID
   const extractVideoId = (url) => {
     const match = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/);
     return match ? match[1] : null;
   };
 
-  // ⭐ Add to history — builds a full video object
+  // Add to watch history
   const addToHistory = (video) => {
     if (history.find((v) => v.id === video.id)) return;
 
@@ -61,7 +57,7 @@ function App() {
     setHistory((prev) => [...prev, fullItem]);
   };
 
-  // ---------- VIDEO GRID ----------
+  // ---------- RENDER MAIN VIDEO GRID ----------
   const renderVideos = (items) => (
     <div
       style={{
@@ -86,7 +82,6 @@ function App() {
               boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
             }}
           >
-            {/* THUMBNAIL */}
             <a
               href={`https://www.youtube.com/watch?v=${id}`}
               target="_blank"
@@ -106,7 +101,6 @@ function App() {
               />
             </a>
 
-            {/* TITLE */}
             <h3
               style={{
                 marginTop: "10px",
@@ -128,7 +122,6 @@ function App() {
               {snippet?.channelTitle}
             </p>
 
-            {/* LIKED BADGE */}
             {isLiked && (
               <div
                 style={{
@@ -142,29 +135,17 @@ function App() {
               </div>
             )}
 
-            {/* LIKE / UNLIKE BUTTON */}
             <button
               onClick={async () => {
                 if (!isLiked) {
                   await mcp("youtube.likeVideo", { videoId: id });
                   setLikedIds((prev) => [...prev, id]);
-
-                  setMessages((prev) => [
-                    ...prev,
-                    { sender: "youi", text: `👍 Liked: ${snippet?.title}` },
-                  ]);
                 } else {
                   await mcp("youtube.likeVideo", {
                     videoId: id,
                     rating: "none",
                   });
-
                   setLikedIds((prev) => prev.filter((v) => v !== id));
-
-                  setMessages((prev) => [
-                    ...prev,
-                    { sender: "youi", text: `👎 Unliked: ${snippet?.title}` },
-                  ]);
                 }
               }}
               style={{
@@ -186,69 +167,136 @@ function App() {
       })}
     </div>
   );
-  // ---------- RECOMMENDATION LOGIC ----------
-  const fetchRecommendations = async () => {
+
+  // ---------- RENDER RECOMMENDATION SMALL CARDS ----------
+  const renderRecommendList = () => (
+    <div style={{ width: "100%", padding: "10px" }}>
+      <h4 style={{ fontSize: "16px", marginBottom: "10px" }}>Recommended</h4>
+
+      {recommendList.length === 0 && (
+        <div style={{ fontSize: "13px", color: "#666" }}>
+          No recommendations yet.
+        </div>
+      )}
+
+      {recommendList.map((item, i) => {
+        const snippet = item.snippet;
+        const id = item.id?.videoId || item.id;
+        const isLiked = likedIds.includes(id);
+
+        return (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              background: "#fff",
+              marginBottom: "10px",
+              padding: "8px",
+              borderRadius: "10px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            }}
+          >
+            <a
+              href={`https://www.youtube.com/watch?v=${id}`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() =>
+                addToHistory({
+                  id,
+                  title: snippet?.title,
+                  thumbnail: snippet?.thumbnails?.high?.url,
+                  channel: snippet?.channelTitle,
+                })
+              }
+            >
+              <img
+                src={snippet?.thumbnails?.high?.url}
+                style={{
+                  width: "70px",
+                  height: "50px",
+                  objectFit: "cover",
+                  borderRadius: "8px",
+                  marginRight: "10px",
+                }}
+              />
+            </a>
+
+            <div style={{ flex: 1, fontSize: "13px" }}>
+              {snippet?.title.length > 40
+                ? snippet?.title.slice(0, 40) + "..."
+                : snippet?.title}
+            </div>
+
+            <button
+              onClick={async () => {
+                if (!isLiked) {
+                  await mcp("youtube.likeVideo", { videoId: id });
+                  setLikedIds((prev) => [...prev, id]);
+                } else {
+                  await mcp("youtube.likeVideo", {
+                    videoId: id,
+                    rating: "none",
+                  });
+                  setLikedIds((prev) => prev.filter((v) => v !== id));
+                }
+              }}
+              style={{
+                background: isLiked ? "#2E7D32" : "#777",
+                color: "white",
+                border: "none",
+                padding: "8px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                marginLeft: "10px",
+              }}
+            >
+              👍
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // ---------- BUILD RECOMMENDATIONS ----------
+  const buildRecommendations = async () => {
     let keyword = "";
 
-    // 1️⃣ Highest priority → last search keyword
-    if (lastSearch && lastSearch.length > 2) {
-      keyword = lastSearch;
-    }
+    if (lastSearch.length > 2) keyword = lastSearch;
+    else if (history.length > 0)
+      keyword = history[history.length - 1]?.snippet?.title;
+    else if (likedIds.length > 0) keyword = "recommended videos";
 
-    // 2️⃣ Next → last watched video title
-    else if (history.length > 0) {
-      const last = history[history.length - 1];
-      keyword = last.snippet?.title || "";
-    }
-
-    // 3️⃣ Fallback → liked videos titles combined
-    else if (likedIds.length > 0) {
-      keyword = "recommended videos"; // safe fallback
-    }
-
-    // 4️⃣ Last fallback → trending
     if (!keyword) keyword = "trending videos";
-
-    setMessages((prev) => [
-      ...prev,
-      { sender: "youi", text: `🔍 Getting recommendations for "${keyword}"…` },
-    ]);
 
     const res = await mcp("youtube.search", {
       query: keyword,
-      maxResults: 10,
+      maxResults: 5,
     });
 
-    if (res.items) {
-      setCurrentGrid(res.items);
-    }
-
-    return res;
+    if (res.items) setRecommendList(res.items);
   };
 
-  // ---------- INTENT DETECTOR ----------
+  // ---------- DETECT INTENT ----------
   const detectIntent = async (query) => {
     const lower = query.toLowerCase().trim();
     const numberMatch = lower.match(/\b\d+\b/);
     const limit = numberMatch ? parseInt(numberMatch[0]) : 10;
 
-    // ⭐ Track last search
     setLastSearch(query);
+    buildRecommendations();
 
-    // ----- CHANNEL VIDEOS -----
     if (lower.startsWith("channel ")) {
       const res = await mcp("youtube.channelVideos", {
         channel: lower.replace("channel", "").trim(),
       });
-
       if (res.items) setCurrentGrid(res.items);
       return res;
     }
 
-    // ----- LIKED VIDEOS -----
     if (lower.includes("liked")) {
       const res = await mcp("youtube.getLikedVideos");
-
       if (res.items) {
         setLikedIds(res.items.map((v) => v.id));
         setCurrentGrid(res.items);
@@ -256,44 +304,34 @@ function App() {
       return res;
     }
 
-    // ----- WATCH HISTORY -----
     if (lower.includes("history")) {
       setCurrentGrid(history);
       return { items: history };
     }
 
-    // ----- VIDEO INFO -----
     if (lower.startsWith("info ")) {
       return await mcp("youtube.videoInfo", {
         videoId: lower.split(" ")[1],
       });
     }
 
-    // ----- LIKE BY ID OR LINK -----
     if (lower.startsWith("like ")) {
-      const part = query.split(" ")[1];
+      const part = lower.split(" ")[1];
+      let vid = part;
 
-      // If it's a full YouTube URL
       if (part.includes("youtube.com") || part.includes("youtu.be")) {
-        const vid = extractVideoId(part);
-
-        setLikedIds((p) => [...p, vid]);
-
-        return await mcp("youtube.likeVideo", { videoId: vid });
+        vid = extractVideoId(part);
       }
 
-      // If it's a plain ID
-      setLikedIds((p) => [...p, part]);
-
-      return await mcp("youtube.likeVideo", { videoId: part });
+      setLikedIds((p) => [...p, vid]);
+      return await mcp("youtube.likeVideo", { videoId: vid });
     }
 
-    // ----- RECOMMENDATIONS -----
     if (lower.includes("recommend")) {
-      return await fetchRecommendations();
+      buildRecommendations();
+      return { status: "recommend updated" };
     }
 
-    // ----- DEFAULT → SEARCH -----
     const res = await mcp("youtube.search", {
       query,
       maxResults: limit,
@@ -328,7 +366,7 @@ function App() {
           { sender: "youi", text: response },
         ]);
         setIsTyping(false);
-      }, 350);
+      }, 300);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -338,16 +376,6 @@ function App() {
     }
   };
 
-  // ---------- GRID OUTPUT ----------
-  const getLatestVideoGrid = () => {
-    if (currentGrid) return renderVideos(currentGrid);
-
-    return (
-      <div style={{ padding: "20px", color: "#777", fontSize: "16px" }}>
-        Try searching comedy, songs, or channel apna college…
-      </div>
-    );
-  };
   // ---------- UI ----------
   const isMobile = window.innerWidth < 768;
 
@@ -356,11 +384,13 @@ function App() {
       style={{
         height: "100vh",
         display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "140px 1fr 480px",
+        gridTemplateColumns: isMobile
+          ? "1fr"
+          : "180px 1fr 480px",
         background: "#f4f5f7",
       }}
     >
-      {/* ---------------- SIDEBAR (Desktop-only) ---------------- */}
+      {/* SIDEBAR + RECOMMEND LIST */}
       {!isMobile && (
         <div
           style={{
@@ -369,25 +399,17 @@ function App() {
             paddingTop: "25px",
             display: "flex",
             flexDirection: "column",
-            gap: "25px",
             alignItems: "center",
+            overflowY: "auto",
           }}
         >
-          {/* WATCH HISTORY */}
           <button
             style={sideBtn}
-            onClick={() => {
-              setCurrentGrid(history);
-              setMessages((prev) => [
-                ...prev,
-                { sender: "youi", text: { items: history } },
-              ]);
-            }}
+            onClick={() => setCurrentGrid(history)}
           >
             Watch History
           </button>
 
-          {/* LIKED VIDEOS */}
           <button
             style={sideBtn}
             onClick={async () => {
@@ -397,35 +419,34 @@ function App() {
                 setLikedIds(res.items.map((v) => v.id));
                 setCurrentGrid(res.items);
               }
-
-              setMessages((prev) => [...prev, { sender: "youi", text: res }]);
             }}
           >
             Liked Videos
           </button>
 
-          {/* ⭐ RECOMMENDATIONS (NEW FEATURE) */}
           <button
             style={sideBtn}
-            onClick={async () => {
-              const res = await fetchRecommendations();
-              setMessages((prev) => [...prev, { sender: "youi", text: res }]);
-            }}
+            onClick={buildRecommendations}
           >
             Recommendations
           </button>
+
+          {/* RECOMMENDATION SIDEBAR LIST */}
+          <div style={{ marginTop: "20px", width: "100%" }}>
+            {renderRecommendList()}
+          </div>
         </div>
       )}
 
-      {/* ---------------- VIDEO GRID ---------------- */}
+      {/* MAIN VIDEO GRID */}
       <div style={{ overflowY: "auto", maxHeight: isMobile ? "50vh" : "100%" }}>
         <div style={{ padding: "20px", fontSize: "26px", fontWeight: "700" }}>
           YOUI – YouTube Dashboard
         </div>
-        {getLatestVideoGrid()}
+        {currentGrid ? renderVideos(currentGrid) : null}
       </div>
 
-      {/* ---------------- CHAT PANEL (Right Side) ---------------- */}
+      {/* CHAT PANEL */}
       <div
         style={{
           borderLeft: isMobile ? "none" : "1px solid #eee",
@@ -436,7 +457,6 @@ function App() {
           height: isMobile ? "50vh" : "100%",
         }}
       >
-        {/* CHAT MESSAGES */}
         <div style={{ flex: 1, padding: "20px", overflowY: "auto" }}>
           {messages.map((msg, i) => (
             <div
@@ -477,7 +497,7 @@ function App() {
           )}
         </div>
 
-        {/* ---------------- INPUT AREA ---------------- */}
+        {/* INPUT AREA */}
         <div
           style={{
             padding: "12px",
@@ -488,7 +508,7 @@ function App() {
         >
           <input
             value={input}
-            placeholder="Search videos, like URL, recommendations…"
+            placeholder="Search videos, like URL, show recommendations…"
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             style={{
@@ -522,7 +542,7 @@ function App() {
   );
 }
 
-// ---------------- SIDEBAR BUTTON STYLE ----------------
+// Sidebar button style
 const sideBtn = {
   padding: "12px",
   borderRadius: "10px",
@@ -532,6 +552,7 @@ const sideBtn = {
   cursor: "pointer",
   fontSize: "13px",
   fontWeight: "600",
+  textAlign: "center",
 };
 
 export default App;
