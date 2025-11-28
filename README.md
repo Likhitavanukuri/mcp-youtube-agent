@@ -1,234 +1,261 @@
-# 🎥 YOUI – YouTube MCP Agent  
-A complete MCP-based YouTube Agent that integrates with the YouTube Data API through a custom backend server using **OAuth2 + Refresh Token**, and provides a clean, responsive frontend interface built with React.
+YOUI – YouTube MCP Agent
 
-This project allows the user to:
+A fully deployed MCP-based YouTube Assistant that performs real-time actions such as searching videos, fetching channel uploads, liking/unliking videos, showing liked videos, maintaining watch history, and generating personalized recommendations.
 
-- 🔍 Search YouTube videos  
-- 📺 Fetch channel videos  
-- ❤️ View liked videos  
-- 🕒 View watch history  
-- 👍 Like a YouTube video using **video ID or full YouTube link**  
-- 📱 Works on **Laptop + Mobile** (fully responsive)  
-- ⚡ Powered by **Model Context Protocol (MCP)**  
-- 🚀 Fully deployed (Backend + Frontend)
+This project was designed and implemented end-to-end within 48 hours as part of the MCP Agent Development Assignment.
 
----
+🔗 Live Application Links
 
-# 🚀 Live Demo
+Frontend (Vercel): https://mcp-youtube-agent-iota.vercel.app
 
-### Frontend (Vercel)  
-🔗 https://mcp-youtube-agent-iota.vercel.app
+Backend (Render): https://mcp-youtube-backend.onrender.com
 
-### Backend (Render)  
-🔗 https://mcp-youtube-backend.onrender.com
+GitHub Repository: your repo link
 
----
+📌 Project Summary
 
-# 🏗 Project Architecture
+This project implements an AI-powered YouTube Agent using the Model Context Protocol (MCP).
+The aim was to expose YouTube's functionality as MCP tools and build a responsive web application that can interact with these tools.
+The system consists of:
+Backend (Node.js MCP Server): Exposes services like search, like/unlike, history, and channel data.
+Frontend (React): Provides a dashboard-like UI and a chat interface to interact with the agent.
+Despite being built by a fresher, the architecture follows clean separation of concerns, secure token handling, and performance-aware design choices.
+
+🎯 How the Project Meets the MCP Assignment Requirements
+1. Integrate with an External Platform
+Integrated with YouTube Data API v3.Authentication done using Google OAuth2 + long-lasting Refresh Token.No user password is used anywhere.
+
+2. Expose Developer APIs as MCP Tools
+The backend exposes the following MCP tools:MCP Tool	Description
+youtube.search	Search videos on YouTube
+youtube.channelVideos	Fetch channel uploads
+youtube.getLikedVideos	Retrieve user's liked videos
+youtube.getHistory	Get watch history (local simulated)
+youtube.videoInfo	Retrieve metadata for a video
+youtube.likeVideo	Like or unlike any video
+
+These tools fully satisfy the MCP action/intent requirement.
+
+✔ 3. Use MCP for Actions + Retrieval
+
+The agent can:
+Search YouTube
+Fetch videos
+Like/unlike any video
+Add watched videos to history
+Display liked videos
+Provide recommendations
+
+✔ 4. Fully Deployed, Publicly Accessible App
+
+Frontend: Vercel
+
+Backend: Render
+
+Both services communicate securely using environment variables.
+
+✔ 5. GitHub Repository with Documentation
+
+Clean folder structure
+
+Clear READMEs
+
+Well-commented code
+
+Architecture explanation
+
+Setup instructions
+
+✔ 6. Completed Within 48 Hours
+
+Project built from scratch in the required time frame.
+
+🧠 Technical Approach
+
+Even as a fresher, I followed a professional system design approach:
+
+1. Backend (MCP Server)
+Tech Stack
+
+Node.js
+
+Express.js
+
+googleapis (YouTube Data API)
+
+Custom MCP tool router
+
+Roles of Backend
+
+Handle OAuth authentication
+
+Generate access token using refresh token
+
+Define all MCP tools
+
+Serve data to frontend via REST /mcp endpoint
+
+Why Refresh Token Approach?
+
+Avoids login prompt
+
+Enables long-term access
+
+Safer than storing access tokens
+
+Common method in production workloads
+
+Security
+
+Secrets stored in Render environment variables
+
+No token is ever sent to frontend
+
+HTTPS enforced by Render & Vercel
+
+2. Frontend (React)
+Tech Stack
+
+React + Vite
+
+Axios
+
+Responsive CSS layout
+
+LocalStorage
+
+Conditional rendering
+
+Chat-based input system
+
+Key UI Features
+
+YouTube-style card grid
+
+Watch history
+
+Liked videos
+
+Sidebar recommendations
+
+Sticky input bar
+
+Fully mobile-friendly layout
+
+Recommendation Logic (Lightweight ML-inspired design)
+
+Recommendations are generated using:
+
+Last search results
+
+Recent watch history
+
+Liked videos
+
+This keeps it simple while providing meaningful suggestions.
+
+🏗 Folder Structure
 mcp-youtube-agent/
 │
-├── backend/ # MCP Server
-│ ├── index.js # Express server + MCP router
-│ ├── auth.js # OAuth2 + Refresh Token
-│ ├── youtubeRouter.js # YouTube search endpoint
-│ ├── mcp.js # MCP tools implementation
-│ └── youtube.js # YouTube API wrapper
+├── backend/
+│   ├── index.js            # Express server + MCP routing
+│   ├── auth.js             # Handles OAuth refresh token flow
+│   ├── youtube.js          # YouTube API wrapper functions
+│   ├── mcp.js              # Defines all MCP tools (search, like, etc.)
+│   └── youtubeRouter.js    # Additional REST endpoints
 │
-├── frontend/ # React/Vercel UI
-│ ├── src/
-│ │ ├── App.jsx # Main UI + MCP calls
-│ │ └── api.js # Connects frontend → backend
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx         # Main UI with chat + video grid
+│   │   └── api.js          # Connector to backend /mcp endpoint
+│   └── public/
 │
 └── README.md
 
 
----
+This separation makes the system clean, testable, and easy to update.
 
-# 🔐 OAuth2 Setup (Already Done)
+📱 Features Overview
+✔ Search YouTube
 
-The backend uses:
+Fetches high-quality results with thumbnails.
 
-✔ `CLIENT_ID`  
-✔ `CLIENT_SECRET`  
-✔ `REDIRECT_URI`  
-✔ **REFRESH_TOKEN** (long-term token)  
+✔ Watch History
 
-The backend **automatically generates new access tokens** using the refresh token.  
-No login is needed for users.
+Tracks videos from clicks on thumbnails.
 
----
+✔ Liked Videos
 
-# ⚙️ Backend Environment Variables (Render)
+Shows all liked videos from actual YouTube account.
 
-Set these in **Render → Environment Variables**:
+✔ Like/Unlike Videos
 
+Works from:
 
+Fetched results
 
-CLIENT_ID=xxxxxxxxxxxx.apps.googleusercontent.com
-CLIENT_SECRET=xxxxxxxxxxxxxxxx
-REDIRECT_URI=http://localhost:3000/auth/callback
+Recommendations
 
-REFRESH_TOKEN=1//xxxxxxxxxxxxxxxx
-PORT=3001
+Watch history
 
+Full YouTube link (e.g., like https://youtu.be/...)
 
-No OpenAI key is required.
+✔ Recommendations Sidebar
 
----
+Personalized suggestions based on:
 
-# ⚙️ Frontend Environment Variables (Vercel)
+Previous search
 
-Set this in **Vercel → Project Settings → Environment Variables**:
+Watch history
 
+Liked videos
 
+✔ Fully Responsive
 
-VITE_API_BASE_URL=https://mcp-youtube-backend.onrender.com
+Adjusts the layout perfectly across laptop and mobile.
 
+🔐 Security Notes
 
-Frontend automatically picks the backend URL in production.
+API keys kept in backend environment variables
 
----
+No credential in frontend
 
-# 🧠 MCP Tools Supported
+OAuth2 refresh token only used on backend
 
-| MCP Tool | Description |
-|----------|-------------|
-| `youtube.search` | Search YouTube videos |
-| `youtube.getLikedVideos` | Fetch liked videos |
-| `youtube.getHistory` | Fetch watch history |
-| `youtube.channelVideos` | Fetch channel uploads |
-| `youtube.videoInfo` | Get full video info |
-| `youtube.likeVideo` | Like a video (ID or URL) |
+HTTPS enforced by hosting platforms
 
-These tools are consumed by the frontend using `/mcp` route.
+No user passwords collected
 
----
+⚡ Performance & Latency Considerations
 
-# 📱 Features Implemented
+Cached history using localStorage
 
-### ✔ YouTube video search  
-### ✔ Clickable cards with thumbnails  
-### ✔ View liked videos  
-### ✔ View watch history  
-### ✔ Like video using ID or full YouTube link  
-### ✔ Channel videos  
-### ✔ Fully responsive mobile layout  
-### ✔ Sidebar for quick actions  
-### ✔ Auto-scroll chat/messages  
-### ✔ Smooth UI with YouTube-style theme  
+Minimal API calls during browsing
 
----
+Videos limited per request to reduce latency
 
-# 🧩 Flow Diagram
+Render backend handles refresh token instantly
 
+Vercel frontend serves pages via CDN
 
+The result is a fast, smooth, and low-latency user experience.
 
-User → React Frontend → MCP API (/mcp) → Backend Server
-↓
-YouTube Data API
-↓
-Response → Frontend UI
-
-
----
-
-# 🛠 Local Development Guide
-
-## Backend Setup
-
-
+🚀 Running The Project
+Backend
 cd backend
 npm install
 npm start
 
-
-Backend runs at:
-
-
-http://localhost:3001
-
-
----
-
-## Frontend Setup
-
-
+Frontend
 cd frontend
 npm install
 npm run dev
 
-
-Frontend runs at:
-
-
-http://localhost:5173
-
-
----
-
-# 🧪 Example Commands (Inside the App)
-
-### 🔍 Search videos
-
-
-travel videos
-funny videos
-songs 5
-
-
-### 🎬 Channel videos
-
-
+💬 Example Commands
+devops videos
+10 comedy videos
 channel apna college
-
-
-### ❤️ Liked videos
-
-
 liked videos
-
-
-### 🕒 History
-
-
 history
-
-
-### ℹ Get video info
-
-
-info VIDEO_ID
-
-
-### 👍 Like a video (by ID)
-
-
 like dQw4w9WgXcQ
-
-
-### 👍 Like a video (by YouTube link)
-
-
-like https://www.youtube.com/watch?v=dQw4w9WgXcQ
-
 like https://youtu.be/dQw4w9WgXcQ
-
-
----
-
-# 🎯 Assignment Requirements – Completed
-
-| Requirement | Status |
-|------------|--------|
-| Build MCP Agent | ✅ Completed |
-| Connect External Platform | ✅ YouTube API |
-| Expose MCP Tools | ✅ Multiple tools |
-| End-to-end actions | ✔ Search, like, history |
-| Fully deployed | ✔ Vercel + Render |
-| Public GitHub repo | ✔ Complete |
-| Frontend UI | ✔ Modern + responsive |
-
----
-
-# 🧑‍💻 Author
-Vanukuri Likhita
