@@ -15,7 +15,7 @@ export async function handleMcpRequest(body) {
 
   try {
     switch (tool) {
-      // ⭐ YOUTUBE SEARCH (supports dynamic maxResults)
+      // ⭐ SEARCH
       case "youtube.search":
         return await youtubeAPI.search(
           input.query,
@@ -27,7 +27,7 @@ export async function handleMcpRequest(body) {
       case "youtube.getLikedVideos":
         return await youtubeAPI.likedVideos(global.ACCESS_TOKEN);
 
-      // ⭐ WATCH HISTORY (placeholder)
+      // ⭐ HISTORY PLACEHOLDER
       case "youtube.getHistory":
         return await youtubeAPI.likedVideos(global.ACCESS_TOKEN);
 
@@ -45,9 +45,29 @@ export async function handleMcpRequest(body) {
           global.ACCESS_TOKEN
         );
 
-      // ⭐ SUMMARIZE VIDEO
+      // ⭐ CHANNEL VIDEOS
+      case "youtube.channelVideos":
+        return await youtubeAPI.channelVideos(
+          input.channel,
+          global.ACCESS_TOKEN
+        );
+
+      // ⭐ SUBSCRIBE TO CHANNEL (NEW)
+      case "youtube.subscribe":
+        return await youtubeAPI.subscribeChannel(
+          input.channelId,
+          global.ACCESS_TOKEN
+        );
+
+      // ⭐ GET SUBSCRIBED CHANNELS (NEW)
+      case "youtube.getSubscriptions":
+        return await youtubeAPI.getSubscriptions(global.ACCESS_TOKEN);
+
+      // ⭐ DESCRIBE VIDEO
       case "youtube.describeVideo": {
-        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const client = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+        });
 
         const videoId = extractVideoId(input.url);
         if (!videoId) return { error: "Invalid YouTube URL." };
@@ -56,13 +76,13 @@ export async function handleMcpRequest(body) {
           videoId,
           global.ACCESS_TOKEN
         );
-        const snippet = info.items?.[0]?.snippet || {};
 
-        const text = `Summarize this YouTube video:\n\nTitle: ${snippet.title}\nDescription:\n${snippet.description}`;
+        const snippet = info.items?.[0]?.snippet || {};
+        const prompt = `Summarize this YouTube video:\n\nTitle: ${snippet.title}\nDescription:\n${snippet.description}`;
 
         const ai = await client.chat.completions.create({
           model: "gpt-4o-mini",
-          messages: [{ role: "user", content: text }],
+          messages: [{ role: "user", content: prompt }],
         });
 
         return {
@@ -71,9 +91,11 @@ export async function handleMcpRequest(body) {
         };
       }
 
-      // ⭐ AI-BASED RECOMMENDATIONS
+      // ⭐ RECOMMEND BASED ON LIKED VIDEOS
       case "youtube.recommend": {
-        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const client = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+        });
 
         const liked = await youtubeAPI.likedVideos(global.ACCESS_TOKEN);
         const titles =
@@ -93,16 +115,11 @@ export async function handleMcpRequest(body) {
         return ai.choices[0].message.content;
       }
 
-      // ⭐ FETCH CHANNEL VIDEOS
-      case "youtube.channelVideos":
-        return await youtubeAPI.channelVideos(
-          input.channel,
-          global.ACCESS_TOKEN
-        );
-
-      // ⭐ NORMAL CHATBOT
+      // ⭐ REGULAR CHATBOT
       case "youi.chat": {
-        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const client = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+        });
 
         const ai = await client.chat.completions.create({
           model: "gpt-4o-mini",
@@ -112,18 +129,15 @@ export async function handleMcpRequest(body) {
         return ai.choices[0].message.content;
       }
 
-      // ⭐ SMART GREETING CHATBOT
+      // ⭐ SMART CHATBOT
       case "youi.chatSmart": {
-        const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const client = new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+        });
 
         const ai = await client.chat.completions.create({
           model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "user",
-              content: input.text,
-            },
-          ],
+          messages: [{ role: "user", content: input.text }],
         });
 
         return ai.choices[0].message.content;
@@ -138,7 +152,7 @@ export async function handleMcpRequest(body) {
   }
 }
 
-// ⭐ FIXED CLEAN REGEX (no errors)
+// Extract video ID
 function extractVideoId(url) {
   const m = url.match(/(?:v=|youtu\.be\/)([^&?\n]+)/);
   return m ? m[1] : null;

@@ -1,6 +1,7 @@
 import axios from "axios";
 
 export const youtubeAPI = {
+  // 🔍 SEARCH
   search: async (query, token, maxResults = 10) => {
     const res = await axios.get(
       "https://www.googleapis.com/youtube/v3/search",
@@ -17,6 +18,7 @@ export const youtubeAPI = {
     return res.data;
   },
 
+  // ❤️ LIKED VIDEOS
   likedVideos: async (token) => {
     const res = await axios.get(
       "https://www.googleapis.com/youtube/v3/videos",
@@ -32,6 +34,7 @@ export const youtubeAPI = {
     return res.data;
   },
 
+  // 👍 LIKE VIDEO
   likeVideo: async (videoId, token) => {
     await axios.post(
       "https://www.googleapis.com/youtube/v3/videos/rate",
@@ -44,6 +47,7 @@ export const youtubeAPI = {
     return { success: true };
   },
 
+  // ℹ INFO
   videoInfo: async (videoId, token) => {
     const res = await axios.get(
       "https://www.googleapis.com/youtube/v3/videos",
@@ -58,6 +62,7 @@ export const youtubeAPI = {
     return res.data;
   },
 
+  // 📺 CHANNEL VIDEOS
   channelVideos: async (channelName, token) => {
     try {
       const searchRes = await axios.get(
@@ -94,8 +99,65 @@ export const youtubeAPI = {
 
       return videoRes.data;
     } catch (e) {
-      console.error("Channel fetch error:", e);
       return { error: "Unable to fetch channel videos." };
+    }
+  },
+
+  // 🔔 SUBSCRIBE TO CHANNEL
+  subscribeChannel: async (channelId, token) => {
+    try {
+      const res = await axios.post(
+        "https://www.googleapis.com/youtube/v3/subscriptions",
+        {
+          snippet: {
+            resourceId: {
+              kind: "youtube#channel",
+              channelId: channelId,
+            },
+          },
+        },
+        {
+          params: { part: "snippet" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      return {
+        success: true,
+        message: `Subscribed to channel ${channelId}`,
+        data: res.data,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.response?.data?.error?.message || err.message,
+      };
+    }
+  },
+
+  // 📌 GET SUBSCRIPTIONS
+  getSubscriptions: async (token) => {
+    try {
+      const res = await axios.get(
+        "https://www.googleapis.com/youtube/v3/subscriptions",
+        {
+          params: {
+            part: "snippet",
+            mine: true,
+            maxResults: 25,
+          },
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      return res.data;
+    } catch (err) {
+      return {
+        error: err.response?.data?.error?.message || err.message,
+      };
     }
   },
 };

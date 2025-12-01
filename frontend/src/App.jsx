@@ -11,6 +11,7 @@ function App() {
   const [isTyping, setIsTyping] = useState(false);
 
   const [likedIds, setLikedIds] = useState([]);
+  const [subscribedChannels, setSubscribedChannels] = useState([]);
   const [history, setHistory] = useState([]);
   const [currentGrid, setCurrentGrid] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
@@ -20,13 +21,20 @@ function App() {
       .get(`${import.meta.env.VITE_API_BASE_URL}/auth/status`)
       .catch(() => {});
 
-    const saved = localStorage.getItem("watchHistory");
-    if (saved) setHistory(JSON.parse(saved));
+    const savedHistory = localStorage.getItem("watchHistory");
+    if (savedHistory) setHistory(JSON.parse(savedHistory));
+
+    const savedSubs = localStorage.getItem("subscriptions");
+    if (savedSubs) setSubscribedChannels(JSON.parse(savedSubs));
   }, []);
 
   useEffect(() => {
     localStorage.setItem("watchHistory", JSON.stringify(history));
   }, [history]);
+
+  useEffect(() => {
+    localStorage.setItem("subscriptions", JSON.stringify(subscribedChannels));
+  }, [subscribedChannels]);
 
   const extractVideoId = (url) => {
     const match = url.match(/(?:v=|youtu\.be\/)([^&\n?#]+)/);
@@ -50,6 +58,7 @@ function App() {
     setHistory((prev) => [...prev, fullItem]);
   };
 
+  // ⭐ RENDER VIDEOS (Added Subscribe Button)
   const renderVideos = (items) => (
     <div
       style={{
@@ -62,7 +71,14 @@ function App() {
       {items.map((item, index) => {
         const snippet = item.snippet;
         const id = item.id?.videoId || item.id;
+
+        const channelId =
+          snippet.channelId ||
+          item.snippet?.channelId ||
+          item.snippet?.resourceId?.channelId;
+
         const isLiked = likedIds.includes(id);
+        const isSubscribed = subscribedChannels.includes(channelId);
 
         return (
           <div
@@ -70,7 +86,7 @@ function App() {
             style={{
               background: "#fff",
               borderRadius: "16px",
-              padding: "10px",
+              padding: "12px",
               boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
             }}
           >
@@ -122,19 +138,7 @@ function App() {
               {snippet?.channelTitle}
             </p>
 
-            {isLiked && (
-              <div
-                style={{
-                  fontSize: "14px",
-                  color: "#2E7D32",
-                  fontWeight: "600",
-                  marginBottom: "8px",
-                }}
-              >
-                👍 Liked
-              </div>
-            )}
-
+            {/* LIKE BUTTON */}
             <button
               onClick={async () => {
                 if (!isLiked) {
@@ -162,12 +166,38 @@ function App() {
             >
               {isLiked ? "👍 Liked" : "👍 Like"}
             </button>
+
+            {/* ⭐ SUBSCRIBE BUTTON (NEW) */}
+            <button
+              onClick={async () => {
+                if (!isSubscribed) {
+                  await mcp("youtube.subscribe", {
+                    channelId,
+                  });
+                  setSubscribedChannels((prev) => [...prev, channelId]);
+                }
+              }}
+              style={{
+                marginTop: "10px",
+                background: isSubscribed ? "#2E7D32" : "#d90429",
+                color: "white",
+                padding: "10px 14px",
+                borderRadius: "8px",
+                border: "none",
+                fontSize: "14px",
+                cursor: "pointer",
+                width: "100%",
+              }}
+            >
+              {isSubscribed ? "✔ Subscribed" : "🔔 Subscribe"}
+            </button>
           </div>
         );
       })}
     </div>
   );
-  // ---------- RENDER RECOMMENDATIONS (SIDEBAR LIST) ----------
+
+  // ⭐ RENDER SIDEBAR RECOMMENDATIONS
   const renderRecommendations = (items) => (
     <div
       style={{
@@ -179,7 +209,14 @@ function App() {
       {items.map((item, index) => {
         const id = item.id?.videoId || item.id;
         const snippet = item.snippet;
+
+        const channelId =
+          snippet.channelId ||
+          item.snippet?.resourceId?.channelId ||
+          item.snippet?.channelId;
+
         const isLiked = likedIds.includes(id);
+        const isSubscribed = subscribedChannels.includes(channelId);
 
         return (
           <div
@@ -226,6 +263,7 @@ function App() {
               {snippet?.title.slice(0, 40)}...
             </div>
 
+            {/* LIKE BUTTON SMALL */}
             <button
               onClick={async () => {
                 if (!isLiked) {
@@ -253,18 +291,41 @@ function App() {
             >
               {isLiked ? "👍 Liked" : "👍 Like"}
             </button>
+
+            {/* SUBSCRIBE SMALL */}
+            <button
+              onClick={async () => {
+                if (!isSubscribed) {
+                  await mcp("youtube.subscribe", { channelId });
+                  setSubscribedChannels((prev) => [...prev, channelId]);
+                }
+              }}
+              style={{
+                marginTop: "6px",
+                background: isSubscribed ? "#2E7D32" : "#d90429",
+                color: "white",
+                padding: "6px 10px",
+                borderRadius: "8px",
+                border: "none",
+                fontSize: "12px",
+                cursor: "pointer",
+                width: "100%",
+              }}
+            >
+              {isSubscribed ? "✔ Subscribed" : "🔔 Subscribe"}
+            </button>
           </div>
         );
       })}
     </div>
   );
-
-  // ---------- INTENT DETECTOR ----------
+  // ⭐ INTENT DETECTOR — MAIN LOGIC
   const detectIntent = async (query) => {
     const lower = query.toLowerCase().trim();
     const numberMatch = lower.match(/\b\d+\b/);
     const limit = numberMatch ? parseInt(numberMatch[0]) : 10;
 
+    // ⭐ CHANNEL VIDEOS
     if (lower.startsWith("channel ")) {
       const res = await mcp("youtube.channelVideos", {
         channel: lower.replace("channel", "").trim(),
@@ -273,6 +334,7 @@ function App() {
       return res;
     }
 
+    // ⭐ LIKED VIDEOS
     if (lower.includes("liked")) {
       const res = await mcp("youtube.getLikedVideos");
       if (res.items) {
@@ -282,16 +344,20 @@ function App() {
       return res;
     }
 
+    // ⭐ SHOW WATCH HISTORY
     if (lower.includes("history")) {
       setCurrentGrid(history);
       return { items: history };
     }
 
-    if (lower.startsWith("info "))
+    // ⭐ VIDEO INFO
+    if (lower.startsWith("info ")) {
       return await mcp("youtube.videoInfo", {
         videoId: lower.split(" ")[1],
       });
+    }
 
+    // ⭐ LIKE VIDEO
     if (lower.startsWith("like ")) {
       const part = query.split(" ")[1];
 
@@ -305,7 +371,49 @@ function App() {
       return await mcp("youtube.likeVideo", { videoId: part });
     }
 
-    // DEFAULT SEARCH
+    // ⭐ SUBSCRIBE COMMAND
+    if (
+      lower.startsWith("subscribe") ||
+      lower.includes("subscribe to") ||
+      lower.includes("subscribe channel")
+    ) {
+      const parts = query.split(" ");
+      if (parts.length > 1) {
+        const channelId = parts[1];
+        await mcp("youtube.subscribe", { channelId });
+        setSubscribedChannels((prev) => [...prev, channelId]);
+        return { text: `Subscribed to channel ${channelId}` };
+      }
+      return { text: "Please provide a channel ID to subscribe." };
+    }
+
+    // ⭐ SHOW SUBSCRIBED CHANNELS
+    if (
+      lower.includes("subscriptions") ||
+      lower.includes("subscribed channels") ||
+      lower.includes("my subscriptions")
+    ) {
+      const res = await mcp("youtube.getSubscriptions");
+
+      if (res.items) {
+        const channels = res.items.map((c) => ({
+          id: c.snippet.resourceId.channelId,
+          snippet: {
+            title: c.snippet.title,
+            channelTitle: c.snippet.title,
+            thumbnails: {
+              high: { url: c.snippet.thumbnails.high.url },
+            },
+          },
+        }));
+
+        setCurrentGrid(channels);
+      }
+
+      return { text: "Showing your subscribed channels." };
+    }
+
+    // ⭐ DEFAULT SEARCH
     const res = await mcp("youtube.search", {
       query,
       maxResults: limit,
@@ -314,7 +422,6 @@ function App() {
     if (res.items) {
       setCurrentGrid(res.items);
 
-      // Create sidebar recommendations
       const sample = res.items.slice(0, 6);
       setRecommendations(sample);
     }
@@ -322,7 +429,7 @@ function App() {
     return res;
   };
 
-  // ---------- SEND MESSAGE ----------
+  // ⭐ SEND MESSAGE
   const sendMessage = async () => {
     if (!input.trim()) return;
 
@@ -340,13 +447,16 @@ function App() {
       const response = await detectIntent(query);
 
       setTimeout(() => {
-        setMessages((prev) => [...prev, { sender: "youi", text: response }]);
+        setMessages((prev) => [
+          ...prev,
+          { sender: "youi", text: response.text || "(see results below)" },
+        ]);
         setIsTyping(false);
       }, 350);
     } catch {
       setMessages((prev) => [
         ...prev,
-        { sender: "youi", text: "❌ Error fetching videos." },
+        { sender: "youi", text: "❌ Error fetching data." },
       ]);
       setIsTyping(false);
     }
@@ -357,7 +467,7 @@ function App() {
 
     return (
       <div style={{ padding: "20px", color: "#777", fontSize: "16px" }}>
-        Try searching comedy, songs, or channel apna college…
+        Try searching comedy, songs, or "channel apna college"…
       </div>
     );
   };
@@ -373,7 +483,7 @@ function App() {
         background: "#f4f5f7",
       }}
     >
-      {/* SIDEBAR */}
+      {/* LEFT SIDEBAR */}
       {!isMobile && (
         <div
           style={{
@@ -417,6 +527,28 @@ function App() {
             Liked Videos
           </button>
 
+          <button
+            style={sideBtn}
+            onClick={async () => {
+              const res = await mcp("youtube.getSubscriptions");
+              if (res.items) {
+                const channels = res.items.map((c) => ({
+                  id: c.snippet.resourceId.channelId,
+                  snippet: {
+                    title: c.snippet.title,
+                    channelTitle: c.snippet.title,
+                    thumbnails: {
+                      high: { url: c.snippet.thumbnails.high.url },
+                    },
+                  },
+                }));
+                setCurrentGrid(channels);
+              }
+            }}
+          >
+            Subscribed Channels
+          </button>
+
           <div style={{ marginTop: "15px", fontWeight: "700" }}>
             Recommendations
           </div>
@@ -426,7 +558,7 @@ function App() {
         </div>
       )}
 
-      {/* MAIN GRID */}
+      {/* MIDDLE — VIDEO GRID */}
       <div style={{ overflowY: "auto", maxHeight: isMobile ? "50vh" : "100%" }}>
         <div style={{ padding: "20px", fontSize: "26px", fontWeight: "700" }}>
           YOUI – YouTube Dashboard
@@ -434,7 +566,7 @@ function App() {
         {getLatestVideoGrid()}
       </div>
 
-      {/* CHAT PANEL */}
+      {/* RIGHT SIDE — CHAT PANEL */}
       <div
         style={{
           borderLeft: isMobile ? "none" : "1px solid #eee",
@@ -485,7 +617,7 @@ function App() {
           )}
         </div>
 
-        {/* INPUT BAR — STICKY */}
+        {/* INPUT BAR */}
         <div
           style={{
             padding: "12px",
@@ -500,7 +632,7 @@ function App() {
         >
           <input
             value={input}
-            placeholder="Search videos, like URL, or show recommendations…"
+            placeholder="Search videos, subscribe channel, show subscriptions…"
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             style={{
@@ -533,7 +665,7 @@ function App() {
   );
 }
 
-// Sidebar buttons
+// Sidebar button style
 const sideBtn = {
   padding: "12px",
   borderRadius: "10px",
